@@ -221,6 +221,7 @@ do_send(Msg, #?STATE{protocol = Protocol,
     case of_protocol:encode(Msg) of
         {ok, EncodedMessage} ->
             ?DEBUG("Send to ~p: ~p~n", [IpAddr, Msg]),
+            ls_metrics:of_message_out(Msg),
             of_driver_utils:send(Protocol, Socket, EncodedMessage);
         {error, Error} ->
             {error, Error}
@@ -318,6 +319,7 @@ handle_messages([], NewState) ->
     {ok, NewState};
 handle_messages([Message|Rest], NewState) ->
     ?DEBUG("Receive from ~p: ~p~n", [NewState#?STATE.address, Message]),
+    ls_metrics:of_message_in(Message),
     case handle_message(Message, NewState) of
         {stop, Reason, State} ->
             {stop, Reason, State};
