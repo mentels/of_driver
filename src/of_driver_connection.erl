@@ -230,7 +230,6 @@ do_send(Msg, #?STATE{protocol = Protocol,
     case of_protocol:encode(Msg) of
         {ok, EncodedMessage} ->
             ?DEBUG("Send to ~p: ~p~n", [IpAddr, Msg]),
-            ls_metrics:of_message_out(Msg),
             of_driver_utils:send(Protocol, Socket, EncodedMessage);
         {error, Error} ->
             {error, Error}
