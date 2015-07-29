@@ -87,33 +87,40 @@ start_link(Socket) ->
 init([Socket]) ->
     Protocol = tcp,
     of_driver_utils:setopts(Protocol, Socket, [{active, once}]),
-    {ok, {Address, Port}} = inet:peername(Socket),
-    SwitchHandler = of_driver_utils:conf_default(callback_module, fun erlang:is_atom/1, of_driver_default_handler),
-    PingEnable = of_driver_utils:conf_default(enable_ping, fun erlang:is_atom/1, false),
-    PingTimeout = of_driver_utils:conf_default(ping_timeout, fun erlang:is_integer/1, 1000),
-    PingIdle = of_driver_utils:conf_default(ping_idle, fun erlang:is_integer/1, 5000),
-    IdlePollInt = of_driver_utils:conf_default(idle_timeout_poll, fun erlang:is_integer/1, 1000),
-    MultipartTimeout = of_driver_utils:conf_default(multipart_timeout, fun erlang:is_integer/1, 30000),
-    Opts = of_driver_utils:conf_default(init_opt, []),
-    ?INFO("Connected to Switch on ~s:~p. Connection : ~p \n",[inet_parse:ntoa(Address), Port, self()]),
-    Versions = of_driver_utils:conf_default(of_compatible_versions, fun erlang:is_list/1, [3, 4]),
-    ok = gen_server:cast(self(), {send, hello}),
-    ITRef = maybe_idle_check(PingEnable, IdlePollInt),
-    {ok, #?STATE{ switch_handler      = SwitchHandler,
-                  switch_handler_opts = Opts,
-                  ping_timeout        = PingTimeout,
-                  ping_idle           = PingIdle,
-                  idle_poll_interval  = IdlePollInt,
-                  multipart_timeout   = MultipartTimeout,
-                  socket              = Socket,
-                  ctrl_versions       = Versions,
-                  protocol            = Protocol,
-                  address             = Address,
-                  port                = Port,
-                  pending_msgs        = gb_trees:empty(),
-                  idle_timer_poller   = ITRef,
-                  last_receive        = now()
-                }}.
+    try
+        {ok, {Address, Port}} = inet:peername(Socket),
+        SwitchHandler = of_driver_utils:conf_default(callback_module, fun erlang:is_atom/1, of_driver_default_handler),
+        PingEnable = of_driver_utils:conf_default(enable_ping, fun erlang:is_atom/1, false),
+        PingTimeout = of_driver_utils:conf_default(ping_timeout, fun erlang:is_integer/1, 1000),
+        PingIdle = of_driver_utils:conf_default(ping_idle, fun erlang:is_integer/1, 5000),
+        IdlePollInt = of_driver_utils:conf_default(idle_timeout_poll, fun erlang:is_integer/1, 1000),
+        MultipartTimeout = of_driver_utils:conf_default(multipart_timeout, fun erlang:is_integer/1, 30000),
+        Opts = of_driver_utils:conf_default(init_opt, []),
+        ?INFO("Connected to Switch on ~s:~p. Connection : ~p \n",[inet_parse:ntoa(Address), Port, self()]),
+        Versions = of_driver_utils:conf_default(of_compatible_versions, fun erlang:is_list/1, [3, 4]),
+        ok = gen_server:cast(self(), {send, hello}),
+        ITRef = maybe_idle_check(PingEnable, IdlePollInt),
+        {ok, #?STATE{ switch_handler      = SwitchHandler,
+                      switch_handler_opts = Opts,
+                      ping_timeout        = PingTimeout,
+                      ping_idle           = PingIdle,
+                      idle_poll_interval  = IdlePollInt,
+                      multipart_timeout   = MultipartTimeout,
+                      socket              = Socket,
+                      ctrl_versions       = Versions,
+                      protocol            = Protocol,
+                      address             = Address,
+                      port                = Port,
+                      pending_msgs        = gb_trees:empty(),
+                      idle_timer_poller   = ITRef,
+                      last_receive        = now()
+                    }}
+    catch
+        _:Reason ->
+            ?WARNING("Failed to initialzied connection with controller: ~p",
+                     [Reason]),
+            {stop, {conn_initialization_failed, Reason}}
+    end.
 
 %%------------------------------------------------------------------
 
