@@ -224,7 +224,9 @@ receive_ping(#?STATE{ping_timeout_timer = TRef} = State) ->
 
 do_send(Msg, #?STATE{protocol = Protocol,
                      socket = Socket,
-                     address = IpAddr} = _State) ->
+                      address = IpAddr,
+                      datapath_mac = DatapathMac} = _State) ->
+    ls_metrics:handle_packet_out(DatapathMac,Msg),
     case of_protocol:encode(Msg) of
         {ok, EncodedMessage} ->
             ?DEBUG("Send to ~p: ~p~n", [IpAddr, Msg]),
@@ -326,7 +328,7 @@ handle_messages([], NewState) ->
     {ok, NewState};
 handle_messages([Message|Rest], NewState) ->
     ?DEBUG("Receive from ~p: ~p~n", [NewState#?STATE.address, Message]),
-    ls_metrics:of_message_in(Message),
+    ls_metrics:handle_packet_in(NewState#?STATE.datapath_mac, Message),
     case handle_message(Message, NewState) of
         {stop, Reason, State} ->
             {stop, Reason, State};
@@ -350,7 +352,7 @@ handle_message(#ofp_message{version = Version,
             State#?STATE{aux_id = 0, datapath_mac = DatapathMac};
         _ ->
         	{_MsgName, _MsgXid, MsgRes} = of_msg_lib:decode(Msg),
-          DPID = proplists:get_value(datapath_id,  MsgRes),
+                        DPID = proplists:get_value(datapath_id,  MsgRes),
           PDMAC = proplists:get_value(datapath_mac, MsgRes),
           DatapathMac = of_driver_utils:datapath_mac(DPID,PDMAC),
         	AuxID = proplists:get_value(auxiliary_id, MsgRes),
@@ -490,6 +492,9 @@ close_of_connection(#?STATE{socket        = Socket,
     connection_close_callback(SwitchHandler, HandlerState, AuxID),
     {stop, normal, State#?STATE{socket = undefined}}.
 
+connection_close_callback(Module, undefined, _) ->
+    ?WARNING("Switch handler state for ~p undefined while closing connection ",
+             [Module]);
 connection_close_callback(Module, HandlerState, 0) ->
     Module:terminate(driver_closed_connection, HandlerState);
 connection_close_callback(Module, HandlerState, _AuxID) ->
