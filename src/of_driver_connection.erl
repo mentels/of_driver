@@ -222,14 +222,14 @@ receive_ping(#?STATE{ping_timeout_timer = TRef} = State) ->
     {ok, cancel} = timer:cancel(TRef),
     State#?STATE{ping_timeout_timer = undefined, ping_xid = undefined}.
 
-do_send(Msg, #?STATE{protocol = Protocol,
+do_send(Msg0, #?STATE{protocol = Protocol,
                      socket = Socket,
                       address = IpAddr,
                       datapath_mac = DatapathMac} = _State) ->
-    ls_metrics:handle_packet_out(DatapathMac,Msg),
-    case of_protocol:encode(Msg) of
+    Msg1 = ls_metrics:handle_packet_out(DatapathMac,Msg0),
+    case of_protocol:encode(Msg1) of
         {ok, EncodedMessage} ->
-            ?DEBUG("Send to ~p: ~p~n", [IpAddr, Msg]),
+            ?DEBUG("Send to ~p: ~p~n", [IpAddr, Msg1]),
             of_driver_utils:send(Protocol, Socket, EncodedMessage);
         {error, Error} ->
             {error, Error}
@@ -325,10 +325,11 @@ do_handle_tcp(#?STATE{ parser = Parser, version = Version } = State, Data) ->
 
 handle_messages([], NewState) ->
     {ok, NewState};
-handle_messages([Message|Rest], NewState) ->
-    ?DEBUG("Receive from ~p: ~p~n", [NewState#?STATE.address, Message]),
-    ls_metrics:handle_packet_in(NewState#?STATE.datapath_mac, Message),
-    case handle_message(Message, NewState) of
+handle_messages([Message0|Rest], NewState) ->
+    ?DEBUG("Receive from ~p: ~p~n", [NewState#?STATE.address, Message0]),
+    Message1 = ls_metrics:handle_packet_in(NewState#?STATE.datapath_mac,
+                                           Message0),
+    case handle_message(Message1, NewState) of
         {stop, Reason, State} ->
             {stop, Reason, State};
         NextState ->
